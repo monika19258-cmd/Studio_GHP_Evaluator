@@ -1,0 +1,59 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark, teal-accent palette ported from the original tool (as HSL for Tailwind tokens). */
+    --bg: 225 21% 7%;
+    --surface: 224 24% 12%;
+    --surface2: 227 26% 16%;
+    --surface3: 231 28% 20%;
+    --border: 229 24% 22%;
+    --border2: 231 24% 26%;
+    --accent: 165 100% 42%;
+    --accent2: 165 100% 33%;
+    --warn: 38 92% 50%;
+    --danger: 0 84% 60%;
+    --text: 230 33% 93%;
+    --text2: 219 12% 59%;
+    --text3: 224 17% 35%;
+
+    --font-sans: "IBM Plex Sans", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-bg text-text;
+    font-family: var(--font-sans);
+    line-height: 1.6;
+  }
+}
+
+@layer utilities {
+  .spinner {
+    @apply h-12 w-12 rounded-full border-2 border-border2;
+    border-top-color: hsl(var(--accent));
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

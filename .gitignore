@@ -1,0 +1,19 @@
+/node_modules
+/.next
+/out
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# env files — never commit credentials
+.env
+.env.local
+.env*.local
+
+.DS_Store
+*.log
+/coverage
+
+# Local tooling / agent artifacts (not part of the project)
+/.claude
+/memory
