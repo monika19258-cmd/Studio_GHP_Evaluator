@@ -5,7 +5,15 @@ import { Activity, Loader2, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { useEvaluatorStore } from "@/store/use-evaluator-store";
 import { Card, CardHeader, CardTitle, CardBody, CardTag } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { RaaSResponse } from "@/lib/types";
+
+/** Local "YYYY-MM-DD" for a date (avoids UTC shifting from toISOString). */
+function toDateInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 /**
  * Workday RAAS user-activity panel.
@@ -20,9 +28,18 @@ export function RaasPanel() {
   const raasRows = useEvaluatorStore((s) => s.raasRows);
   const students = useEvaluatorStore((s) => s.students);
 
+  const [fromDate, setFromDate] = React.useState("");
+  const [toDate, setToDate] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [info, setInfo] = React.useState<string | null>(null);
+
+  // Default the window to "today" on mount (client-only, avoids SSR mismatch).
+  React.useEffect(() => {
+    const today = toDateInput(new Date());
+    setFromDate((f) => f || today);
+    setToDate((t) => t || today);
+  }, []);
 
   const matched = students.filter((s) => s.raas).length;
 
@@ -31,11 +48,12 @@ export function RaasPanel() {
     setError(null);
     setInfo(null);
     try {
-      // Empty body: the server resolves URL + credentials from env.
+      // The server resolves URL + credentials from env; we only send the
+      // From/To dates, which rewrite the report's date window.
       const res = await fetch("/api/raas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ fromDate: fromDate || undefined, toDate: toDate || undefined }),
       });
       const data: RaaSResponse = await res.json();
       if (!data.ok) {
@@ -69,10 +87,27 @@ export function RaasPanel() {
           </span>
         </div>
 
-        <Button onClick={fetchActivity} disabled={loading} size="lg">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="raas-from">From date (00:00)</Label>
+            <Input id="raas-from" type="date" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="raas-to">To date (23:59)</Label>
+            <Input id="raas-to" type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} />
+          </div>
+        </div>
+        <p className="font-mono text-[11px] text-text-3">
+          The report window is set to {fromDate || "…"} 00:00:00 → {toDate || "…"} 23:59:59. Everything else (report URL, ISU credentials) comes from the server env.
+        </p>
+
+        <Button onClick={fetchActivity} disabled={loading || !fromDate || !toDate || fromDate > toDate} size="lg">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />}
           {loading ? "Fetching…" : "Fetch User Activity"}
         </Button>
+        {fromDate && toDate && fromDate > toDate && (
+          <p className="font-mono text-[11px] text-danger">From date must be on or before the To date.</p>
+        )}
 
         {error && (
           <div className="flex items-start gap-2 rounded-md border border-danger/20 bg-danger/10 px-3.5 py-2.5 font-mono text-[11px] text-danger">

@@ -28,6 +28,9 @@ export const fieldMapSchema = z.object({
  * RAAS URL and ISU credentials from RAAS_URL / RAAS_USERNAME / RAAS_PASSWORD.
  * When a value IS supplied it overrides the env var (used by tests/tooling).
  */
+/** A calendar date as "YYYY-MM-DD" (from an <input type="date">). */
+const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be YYYY-MM-DD" });
+
 export const raasRequestSchema = z.object({
   url: z
     .string()
@@ -39,9 +42,45 @@ export const raasRequestSchema = z.object({
   /** Force the parser; otherwise inferred from URL/?format= and Content-Type. */
   format: z.enum(["json", "xml"]).optional(),
   fieldMap: fieldMapSchema.optional(),
+  /** Start date — rewrites From_Moment to <date>T00:00:00.000 (start of day). */
+  fromDate: dateOnly.optional(),
+  /** End date — rewrites To_Moment to <date>T23:59:59.999 (end of day). */
+  toDate: dateOnly.optional(),
 });
 
 export type RaaSRequest = z.infer<typeof raasRequestSchema>;
+
+/** Extract a timezone offset ("-07:00", "+05:30", "Z") from the END of a string. */
+function offsetOf(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const m = value.match(/(Z|[+-]\d{2}:\d{2})$/);
+  return m ? m[1] : null;
+}
+
+/** Set or append a single query param on a raw URL string (keeps colons literal). */
+function setParam(url: string, key: string, value: string): string {
+  const re = new RegExp(`([?&]${key}=)[^&]*`);
+  if (re.test(url)) return url.replace(re, `$1${value}`);
+  return url + (url.includes("?") ? "&" : "?") + `${key}=${value}`;
+}
+
+/**
+ * Apply a user-selected date range to a Workday RAAS URL by rewriting the
+ * From_Moment (start of day, 00:00:00.000) and To_Moment (end of day,
+ * 23:59:59.999) prompt parameters. `fromDate`/`toDate` are "YYYY-MM-DD".
+ *
+ * The timezone offset is taken from the URL's existing moments when present,
+ * otherwise from `fallbackOffset` (RAAS_TZ_OFFSET, default "-07:00") so the
+ * window matches the tenant's local day rather than UTC.
+ */
+export function applyDateRange(rawUrl: string, fromDate?: string, toDate?: string, fallbackOffset = "-07:00"): string {
+  const existing = offsetOf(rawUrl.match(/From_Moment=([^&]*)/)?.[1]) ?? offsetOf(rawUrl.match(/To_Moment=([^&]*)/)?.[1]);
+  const offset = existing ?? (/^(Z|[+-]\d{2}:\d{2})$/.test(fallbackOffset) ? fallbackOffset : "-07:00");
+  let out = rawUrl;
+  if (fromDate) out = setParam(out, "From_Moment", `${fromDate}T00:00:00.000${offset}`);
+  if (toDate) out = setParam(out, "To_Moment", `${toDate}T23:59:59.999${offset}`);
+  return out;
+}
 
 /** Pull report rows out of either a JSON or XML-derived object. */
 export function extractReportRows(parsed: unknown): Record<string, unknown>[] {

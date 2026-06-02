@@ -15,7 +15,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { XMLParser } from "fast-xml-parser";
-import { DEFAULT_FIELD_MAP, extractReportRows, normalizeRows, raasRequestSchema } from "@/lib/raas/schema";
+import { DEFAULT_FIELD_MAP, applyDateRange, extractReportRows, normalizeRows, raasRequestSchema } from "@/lib/raas/schema";
 import type { RaaSResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -42,13 +42,16 @@ export async function POST(req: NextRequest) {
   const { fieldMap: reqFieldMap, format: forcedFormat } = parsed.data;
 
   // 2. Resolve the RAAS URL: request body first, then server env (RAAS_URL).
-  const url = parsed.data.url ?? process.env.RAAS_URL;
-  if (!url) {
+  const baseUrl = parsed.data.url ?? process.env.RAAS_URL;
+  if (!baseUrl) {
     return json({ ok: false, rows: [], count: 0, format: "json", error: "No RAAS report URL configured. Set RAAS_URL in .env.local (server side)." }, 400);
   }
-  if (!url.startsWith("https://")) {
+  if (!baseUrl.startsWith("https://")) {
     return json({ ok: false, rows: [], count: 0, format: "json", error: "Configured RAAS_URL must use https://." }, 400);
   }
+  // Rewrite the report's date window from the UI-selected From/To dates
+  // (start-of-day → end-of-day), keeping the URL's existing timezone offset.
+  const url = applyDateRange(baseUrl, parsed.data.fromDate, parsed.data.toDate, process.env.RAAS_TZ_OFFSET);
 
   // 3. Resolve credentials: request body first, then server env fallback.
   const username = parsed.data.username ?? process.env.RAAS_USERNAME;
