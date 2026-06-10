@@ -20,6 +20,8 @@ import type { RaaSIntegrationResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Allow up to 60s on Vercel (default is ~10s, which can kill a slow RAAS call).
+export const maxDuration = 60;
 
 const bodySchema = z.object({ integrationName: z.string().min(1) });
 
@@ -67,7 +69,9 @@ export async function POST(req: NextRequest) {
       method: "GET",
       headers: { Authorization: authHeader, Accept: "application/json, text/xml;q=0.9, */*;q=0.5" },
       cache: "no-store",
-      signal: AbortSignal.timeout(120_000),
+      // Stay just under maxDuration so our handler returns a clean 502 before
+      // the platform kills the function.
+      signal: AbortSignal.timeout(55_000),
     });
     if (res.status === 401 || res.status === 403) return fail("Authentication failed — check the ISU credentials and report access.", 401);
     if (!res.ok) return fail(`Workday returned HTTP ${res.status}.`, 502);

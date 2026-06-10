@@ -20,6 +20,8 @@ import type { RaaSResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Allow up to 60s on Vercel (default is ~10s, which can kill a slow RAAS call).
+export const maxDuration = 60;
 
 function json(body: RaaSResponse, status: number) {
   return NextResponse.json(body, { status });
@@ -84,8 +86,9 @@ export async function POST(req: NextRequest) {
       method: "GET",
       headers: { Authorization: authHeader, Accept: "application/json, text/xml;q=0.9, */*;q=0.5" },
       cache: "no-store",
-      // Workday RAAS reports can be large/slow; give them room but don't hang forever.
-      signal: AbortSignal.timeout(120_000),
+      // Stay just under maxDuration so our handler returns a clean 502 before
+      // the platform kills the function (Vercel caps function duration).
+      signal: AbortSignal.timeout(55_000),
     });
     // 7. Handle auth/HTTP failures gracefully (no credential echo).
     if (res.status === 401 || res.status === 403) {
