@@ -42,6 +42,9 @@ export function buildCsv(students: StudentResult[], rubric: Rubric, downloadEven
     "RAAS Matched",
     "CLAR Downloads",
     "Last Activity",
+    "Integration",
+    "ISU Attached",
+    "Workday Account",
   ];
 
   const rows = sorted.map((s, i) => {
@@ -57,6 +60,9 @@ export function buildCsv(students: StudentResult[], rubric: Rubric, downloadEven
       s.raas ? "yes" : "no",
       downloadCountForStudent(s.name, downloadEvents),
       s.raas?.lastActivity ?? "",
+      s.isuAttachment?.integrationName ?? "",
+      s.isuAttachment?.checked ? (s.isuAttachment.attached ? "yes" : "no") : "",
+      s.isuAttachment?.workdayAccount ?? "",
     ];
     return cols.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(",");
   });

@@ -58,7 +58,7 @@ function offsetOf(value: string | null | undefined): string | null {
 }
 
 /** Set or append a single query param on a raw URL string (keeps colons literal). */
-function setParam(url: string, key: string, value: string): string {
+export function setParam(url: string, key: string, value: string): string {
   const re = new RegExp(`([?&]${key}=)[^&]*`);
   if (re.test(url)) return url.replace(re, `$1${value}`);
   return url + (url.includes("?") ? "&" : "?") + `${key}=${value}`;
@@ -133,7 +133,7 @@ function normKey(s: string): string {
  * Workday User Activity report whose column aliases vary ("System_Account",
  * "System Account", "wd:Target", …) without the grader hand-mapping each one.
  */
-function findByAliases(row: Record<string, unknown>, aliases: string[]): string | undefined {
+export function findByAliases(row: Record<string, unknown>, aliases: string[]): string | undefined {
   const wanted = aliases.map(normKey);
   for (const key of Object.keys(row)) {
     if (wanted.includes(normKey(key))) {

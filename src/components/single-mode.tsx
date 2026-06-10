@@ -10,7 +10,8 @@ import { RuleUpload } from "@/components/rule-upload";
 import { RubricEditor } from "@/components/rubric-editor";
 import { ScoreDetail } from "@/components/score-detail";
 import { readFile } from "@/lib/parsing/file-readers";
-import { buildStudentResult, displayName } from "@/lib/evaluation/run";
+import { buildStudentResult, displayName, integrationNameFromFile, applyIsuAttachment } from "@/lib/evaluation/run";
+import { lookupIsuAttachment } from "@/lib/raas/isu-client";
 
 export function SingleMode() {
   const { rubric, referenceText, students, setStudents } = useEvaluatorStore();
@@ -26,7 +27,7 @@ export function SingleMode() {
     setErr(null);
     try {
       const text = await readFile(studentFile);
-      const sr = buildStudentResult({
+      let sr = buildStudentResult({
         id: "single",
         name: displayName(studentFile.name),
         fileName: studentFile.name,
@@ -34,6 +35,9 @@ export function SingleMode() {
         rubric,
         referenceText,
       });
+      // RAAS: verify the integration's ISU attachment and auto-resolve the ISU criterion.
+      const attachment = await lookupIsuAttachment(integrationNameFromFile(studentFile.name));
+      if (attachment) sr = applyIsuAttachment(sr, rubric, attachment);
       setStudents([sr]);
       setPhase("result");
     } catch (e) {

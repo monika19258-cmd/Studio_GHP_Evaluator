@@ -34,6 +34,10 @@ export function ComparisonTable({ students, rubric, raasEnabled }: { students: S
   const scoring = rubric.criteria.filter((c) => c.kind !== "issg");
   const done = [...students].filter((s) => s.status === "done").sort((a, b) => b.total - a.total);
   const errored = students.filter((s) => s.status === "error");
+  const isuEnabled = students.some((s) => s.isuAttachment);
+  // Full-row spans for the drill-down and error rows (kept in sync with the optional columns).
+  const detailSpan = scoring.length + 5 + (raasEnabled ? 1 : 0) + (isuEnabled ? 1 : 0);
+  const errorSpan = scoring.length + 4 + (raasEnabled ? 1 : 0) + (isuEnabled ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -53,6 +57,7 @@ export function ComparisonTable({ students, rubric, raasEnabled }: { students: S
             <TH>%</TH>
             <TH>Grade</TH>
             {raasEnabled && <TH title="Workday RAAS user activity">Activity</TH>}
+            {isuEnabled && <TH title="Integration→ISU attachment (RAAS-verified)">ISU Attach</TH>}
             <TH />
           </tr>
         </THead>
@@ -120,6 +125,17 @@ export function ComparisonTable({ students, rubric, raasEnabled }: { students: S
                       })()}
                     </TD>
                   )}
+                  {isuEnabled && (
+                    <TD className="text-[10px]">
+                      {(() => {
+                        const a = s.isuAttachment;
+                        if (!a || !a.checked) return <span className="text-text-3" title={a?.error ?? "Not checked"}>—</span>;
+                        if (a.attached)
+                          return <span className="font-semibold text-accent" title={`Integration: ${a.integrationName}`}>{a.workdayAccount}</span>;
+                        return <span className="font-semibold text-danger" title={`Integration: ${a.integrationName}`}>not attached</span>;
+                      })()}
+                    </TD>
+                  )}
                   <TD>
                     <button
                       onClick={() => setOpenIdx(openIdx === idx ? null : idx)}
@@ -132,7 +148,7 @@ export function ComparisonTable({ students, rubric, raasEnabled }: { students: S
                 </tr>
                 {openIdx === idx && (
                   <tr>
-                    <td colSpan={scoring.length + (raasEnabled ? 6 : 5)} className="bg-surface-2 p-4">
+                    <td colSpan={detailSpan} className="bg-surface-2 p-4">
                       <ScoreDetail student={s} rubric={rubric} />
                     </td>
                   </tr>
@@ -146,7 +162,7 @@ export function ComparisonTable({ students, rubric, raasEnabled }: { students: S
                 <CircleX className="mr-1.5 inline h-3 w-3 align-[-1px]" />
                 {s.name}
               </TD>
-              <td colSpan={scoring.length + (raasEnabled ? 5 : 4)} className="border-b border-border px-2.5 py-2 font-mono text-[11px] text-text-3">
+              <td colSpan={errorSpan} className="border-b border-border px-2.5 py-2 font-mono text-[11px] text-text-3">
                 Parse error: {s.error || "Unknown error"}
               </td>
             </tr>

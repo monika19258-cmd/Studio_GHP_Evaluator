@@ -120,6 +120,43 @@ export interface StudentResult extends EvaluationOutput {
   manualScores: Record<string, number>;
   /** Matched RAAS activity, if a RAAS report was fetched. */
   raas?: RaaSActivity | null;
+  /** RAAS-verified ISU attachment for this CLAR's integration, if checked. */
+  isuAttachment?: IsuAttachment | null;
+}
+
+/**
+ * Result of looking up — via a RAAS Integration-System report — whether the
+ * integration named by a CLAR file is attached to an ISU (Workday_Account).
+ */
+export interface IsuAttachment {
+  /** Integration name used as the report prompt (CLAR filename without .clar). */
+  integrationName: string;
+  /** True only when a lookup actually completed (vs. skipped/errored). */
+  checked: boolean;
+  /** True when the report returned a non-empty Workday_Account. */
+  attached: boolean;
+  /** The ISU the integration is tagged to, or null when not attached. */
+  workdayAccount: string | null;
+  /** Workday's "Integration_System" value, when present. */
+  integrationSystem?: string;
+  /** Workday's "System_Name" value, when present. */
+  systemName?: string;
+  /** Workday's "referenceID" value, when present. */
+  referenceId?: string;
+  /** Set when the lookup could not be performed (config/network/auth). */
+  error?: string;
+}
+
+/** Response shape from POST /api/raas/integration. */
+export interface RaaSIntegrationResponse {
+  ok: boolean;
+  attached: boolean;
+  workdayAccount: string | null;
+  integrationSystem?: string;
+  systemName?: string;
+  referenceId?: string;
+  format?: "json" | "xml";
+  error?: string;
 }
 
 /** Normalized Workday RAAS user-activity row mapped to a student. */

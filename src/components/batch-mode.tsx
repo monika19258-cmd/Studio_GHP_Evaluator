@@ -13,7 +13,8 @@ import { RaasPanel } from "@/components/raas-panel";
 import { DownloadActivity } from "@/components/download-activity";
 import { Progress } from "@/components/ui/progress";
 import { readFile } from "@/lib/parsing/file-readers";
-import { buildStudentResult, displayName } from "@/lib/evaluation/run";
+import { buildStudentResult, displayName, integrationNameFromFile, applyIsuAttachment } from "@/lib/evaluation/run";
+import { lookupIsuAttachment } from "@/lib/raas/isu-client";
 import { buildCsv, downloadCsv } from "@/lib/csv";
 import type { StudentResult } from "@/lib/types";
 
@@ -44,7 +45,11 @@ export function BatchMode() {
       setProgress(((i + 0.5) / files.length) * 100);
       try {
         const text = await readFile(f);
-        out.push(buildStudentResult({ id: f.name, name: displayName(f.name), fileName: f.name, text, rubric, referenceText }));
+        let sr = buildStudentResult({ id: f.name, name: displayName(f.name), fileName: f.name, text, rubric, referenceText });
+        setProgressMsg(`Checking ISU attachment for ${f.name} (${i + 1}/${files.length})`);
+        const attachment = await lookupIsuAttachment(integrationNameFromFile(f.name));
+        if (attachment) sr = applyIsuAttachment(sr, rubric, attachment);
+        out.push(sr);
       } catch (e) {
         out.push({
           id: f.name,
