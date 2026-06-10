@@ -74,31 +74,37 @@ export async function POST(req: NextRequest) {
   if (!/[?&]format=/i.test(target) && !forcedFormat) target += (target.includes("?") ? "&" : "?") + "format=json";
   if (forcedFormat && !/[?&]format=/i.test(target)) target += (target.includes("?") ? "&" : "?") + `format=${forcedFormat}`;
 
-  let res: Response;
+  // Read both the response AND its body within one timeout window. Reading the
+  // body outside the try would let a slow stream abort uncaught (→ 500); here a
+  // timeout anywhere becomes a clean 502.
+  let bodyText = "";
+  let contentType = "";
   try {
-    res = await fetch(target, {
+    const res = await fetch(target, {
       method: "GET",
       headers: { Authorization: authHeader, Accept: "application/json, text/xml;q=0.9, */*;q=0.5" },
       cache: "no-store",
-      // Workday reports can be large/slow; give them room but don't hang forever.
-      signal: AbortSignal.timeout(60_000),
+      // Workday RAAS reports can be large/slow; give them room but don't hang forever.
+      signal: AbortSignal.timeout(120_000),
     });
+    // 7. Handle auth/HTTP failures gracefully (no credential echo).
+    if (res.status === 401 || res.status === 403) {
+      return json({ ok: false, rows: [], count: 0, format: "json", error: "Authentication failed — check the ISU username/password and that the ISU has access to this report." }, 401);
+    }
+    if (!res.ok) {
+      return json({ ok: false, rows: [], count: 0, format: "json", error: `Workday returned HTTP ${res.status}.` }, 502);
+    }
+    contentType = res.headers.get("content-type") || "";
+    bodyText = await res.text();
   } catch (e) {
-    const msg = e instanceof Error && e.name === "TimeoutError" ? "Workday RAAS request timed out." : "Could not reach the Workday RAAS endpoint.";
+    const isTimeout = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    const msg = isTimeout
+      ? "Workday RAAS request timed out — the report took too long to generate. Try a narrower date range."
+      : "Could not reach the Workday RAAS endpoint.";
     return json({ ok: false, rows: [], count: 0, format: "json", error: msg }, 502);
   }
 
-  // 7. Handle auth/HTTP failures gracefully (no credential echo).
-  if (res.status === 401 || res.status === 403) {
-    return json({ ok: false, rows: [], count: 0, format: "json", error: "Authentication failed — check the ISU username/password and that the ISU has access to this report." }, 401);
-  }
-  if (!res.ok) {
-    return json({ ok: false, rows: [], count: 0, format: "json", error: `Workday returned HTTP ${res.status}.` }, 502);
-  }
-
   // 8. Parse JSON or XML.
-  const contentType = res.headers.get("content-type") || "";
-  const bodyText = await res.text();
   const isXml = forcedFormat === "xml" || (!forcedFormat && (contentType.includes("xml") || bodyText.trimStart().startsWith("<")));
   const fieldMap = reqFieldMap ?? DEFAULT_FIELD_MAP;
 
