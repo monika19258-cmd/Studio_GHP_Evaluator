@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { XMLParser } from "fast-xml-parser";
-import { buildIntegrationUrl, extractIsuAttachment } from "@/lib/raas/integration";
+import { buildBroadUrl, buildIntegrationUrl, extractIsuAttachment, fuzzyExtractIsuAttachment } from "@/lib/raas/integration";
 import type { RaaSIntegrationResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -51,54 +51,96 @@ type TenantResult =
   | { ok: true; attached: boolean; workdayAccount: string | null; integrationSystem?: string; systemName?: string; referenceId?: string; label: string }
   | { ok: false; error: string; label: string };
 
-/** Query one tenant's integration ISU report. Credentials are in-memory only. */
-async function queryTenant(cfg: IntegrationTenantConfig, integrationName: string, allowedPrefix?: string): Promise<TenantResult> {
-  if (allowedPrefix && !cfg.url.startsWith(allowedPrefix)) {
-    return { ok: false, error: `${cfg.label}: URL is not in the configured allow-list.`, label: cfg.label };
-  }
-
-  let target = buildIntegrationUrl(cfg.url, integrationName, cfg.promptParam);
-  if (!/[?&]format=/i.test(target)) target += (target.includes("?") ? "&" : "?") + "format=json";
-
-  const authHeader = "Basic " + Buffer.from(`${cfg.username}:${cfg.password}`).toString("base64");
+/**
+ * Fetch a RAAS URL and return the parsed report body, or an error string.
+ * Both the HTTP request and body read happen inside one try/catch so a timeout
+ * during streaming returns a clean error rather than an uncaught DOMException.
+ */
+async function fetchParsed(
+  url: string,
+  authHeader: string,
+  label: string,
+): Promise<{ parsed: unknown; isXml: boolean } | { error: string }> {
   let bodyText = "";
   let contentType = "";
   try {
-    const res = await fetch(target, {
+    const res = await fetch(url, {
       method: "GET",
       headers: { Authorization: authHeader, Accept: "application/json, text/xml;q=0.9, */*;q=0.5" },
       cache: "no-store",
       signal: AbortSignal.timeout(55_000),
     });
-    if (res.status === 401 || res.status === 403) {
-      return { ok: false, error: `${cfg.label}: Authentication failed — check the ISU credentials and report access.`, label: cfg.label };
-    }
-    if (!res.ok) {
-      return { ok: false, error: `${cfg.label}: Workday returned HTTP ${res.status}.`, label: cfg.label };
-    }
+    if (res.status === 401 || res.status === 403) return { error: `${label}: Authentication failed — check the ISU credentials and report access.` };
+    if (!res.ok) return { error: `${label}: Workday returned HTTP ${res.status}.` };
     contentType = res.headers.get("content-type") || "";
     bodyText = await res.text();
   } catch (e) {
     const isTimeout = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-    return {
-      ok: false,
-      error: isTimeout ? `${cfg.label}: Integration RAAS request timed out.` : `${cfg.label}: Could not reach the integration RAAS endpoint.`,
-      label: cfg.label,
-    };
+    return { error: isTimeout ? `${label}: Integration RAAS request timed out.` : `${label}: Could not reach the integration RAAS endpoint.` };
   }
-
   const isXml = contentType.includes("xml") || bodyText.trimStart().startsWith("<");
-  let parsedReport: unknown;
   try {
-    parsedReport = isXml
+    const parsed = isXml
       ? new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", removeNSPrefix: false, parseTagValue: true }).parse(bodyText)
       : JSON.parse(bodyText);
+    return { parsed, isXml };
   } catch {
-    return { ok: false, error: `${cfg.label}: Could not parse the integration report body.`, label: cfg.label };
+    return { error: `${label}: Could not parse the integration report body.` };
+  }
+}
+
+/**
+ * Query one tenant's integration ISU report. Strategy:
+ *  1. Fetch with the exact integration name as the System_Name prompt.
+ *  2. If Workday returns 0 rows (name mismatch due to cosmetic differences like
+ *     underscores vs. camelCase), retry without the prompt to fetch ALL
+ *     integrations and fuzzy-match locally by normalized name.
+ *
+ * This handles cases like CLAR "Mahesh_Reddy_Studio_X" vs. Workday integration
+ * "MaheshReddy_Studio_X" — both normalize to "maheshreddystudiox".
+ * Credentials are in-memory only and never logged.
+ */
+async function queryTenant(cfg: IntegrationTenantConfig, integrationName: string, allowedPrefix?: string): Promise<TenantResult> {
+  if (allowedPrefix && !cfg.url.startsWith(allowedPrefix)) {
+    return { ok: false, error: `${cfg.label}: URL is not in the configured allow-list.`, label: cfg.label };
   }
 
-  const att = extractIsuAttachment(parsedReport, integrationName);
-  return { ok: true, attached: att.attached, workdayAccount: att.workdayAccount, integrationSystem: att.integrationSystem, systemName: att.systemName, referenceId: att.referenceId, label: cfg.label };
+  const authHeader = "Basic " + Buffer.from(`${cfg.username}:${cfg.password}`).toString("base64");
+
+  // ── Step 1: exact-name prompt ──────────────────────────────────────────
+  let exactTarget = buildIntegrationUrl(cfg.url, integrationName, cfg.promptParam);
+  if (!/[?&]format=/i.test(exactTarget)) exactTarget += (exactTarget.includes("?") ? "&" : "?") + "format=json";
+
+  const exactResult = await fetchParsed(exactTarget, authHeader, cfg.label);
+  if ("error" in exactResult) return { ok: false, error: exactResult.error, label: cfg.label };
+
+  const att = extractIsuAttachment(exactResult.parsed, integrationName);
+
+  // Exact match found — return immediately (fast path).
+  if (att.attached) {
+    return { ok: true, attached: true, workdayAccount: att.workdayAccount, integrationSystem: att.integrationSystem, systemName: att.systemName, referenceId: att.referenceId, label: cfg.label };
+  }
+
+  // ── Step 2: fuzzy fallback (only when exact returned 0 rows) ──────────
+  // att.attached is false for two reasons: (a) 0 rows (name mismatch) or
+  // (b) rows returned but Workday_Account is empty (definitively not attached).
+  // We only retry for case (a): try the broad URL and fuzzy-match locally.
+  const broadUrl = buildBroadUrl(cfg.url, cfg.promptParam);
+  if (broadUrl !== cfg.url) {
+    let broadTarget = broadUrl;
+    if (!/[?&]format=/i.test(broadTarget)) broadTarget += (broadTarget.includes("?") ? "&" : "?") + "format=json";
+
+    const broadResult = await fetchParsed(broadTarget, authHeader, cfg.label);
+    if (!("error" in broadResult)) {
+      const fuzzyAtt = fuzzyExtractIsuAttachment(broadResult.parsed, integrationName);
+      if (fuzzyAtt.attached) {
+        return { ok: true, attached: true, workdayAccount: fuzzyAtt.workdayAccount, integrationSystem: fuzzyAtt.integrationSystem, systemName: fuzzyAtt.systemName, referenceId: fuzzyAtt.referenceId, label: cfg.label };
+      }
+    }
+    // Broad fetch failed or no fuzzy match — fall through to "not attached".
+  }
+
+  return { ok: true, attached: false, workdayAccount: null, label: cfg.label };
 }
 
 export async function POST(req: NextRequest) {

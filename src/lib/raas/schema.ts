@@ -64,6 +64,15 @@ export function setParam(url: string, key: string, value: string): string {
   return url + (url.includes("?") ? "&" : "?") + `${key}=${value}`;
 }
 
+/** Remove a query parameter from a URL by key. */
+export function removeParam(url: string, key: string): string {
+  const idx = url.indexOf("?");
+  if (idx === -1) return url;
+  const base = url.slice(0, idx);
+  const pairs = url.slice(idx + 1).split("&").filter((p) => !p.startsWith(key + "=") && p !== key);
+  return pairs.length ? `${base}?${pairs.join("&")}` : base;
+}
+
 /**
  * Apply a user-selected date range to a Workday RAAS URL by rewriting the
  * From_Moment (start of day, 00:00:00.000) and To_Moment (end of day,
