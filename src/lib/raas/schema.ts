@@ -164,7 +164,7 @@ const REQUEST_TIME_ALIASES = ["Request_Time", "Request Time", "requestTime", "Ac
 const IP_ALIASES = ["IP_Address", "IP Address", "ipAddress", "Source_IP"];
 
 /** Normalize raw report rows into RaaSActivity objects using the field map. */
-export function normalizeRows(rows: Record<string, unknown>[], fieldMap: RaaSFieldMap): RaaSActivity[] {
+export function normalizeRows(rows: Record<string, unknown>[], fieldMap: RaaSFieldMap, tenant?: string): RaaSActivity[] {
   return rows.map((row) => {
     // Event-level fields (User Activity report).
     const systemAccount = findByAliases(row, SYSTEM_ACCOUNT_ALIASES);
@@ -190,6 +190,7 @@ export function normalizeRows(rows: Record<string, unknown>[], fieldMap: RaaSFie
       activityCategory: findByAliases(row, ACTIVITY_CATEGORY_ALIASES),
       requestTime: findByAliases(row, REQUEST_TIME_ALIASES),
       ipAddress: findByAliases(row, IP_ALIASES),
+      tenant,
       raw: row,
     };
   });

@@ -12,9 +12,9 @@ import type { DownloadEvent } from "@/lib/types";
 
 /** CSV of the detected download/copy events. */
 function buildDownloadCsv(events: DownloadEvent[]): string {
-  const header = ["Downloader", "Username", "Target CLAR", "Task", "Activity Category", "Request Time", "IP Address", "Cross-Account"];
+  const header = ["Downloader", "Username", "Target CLAR", "Task", "Activity Category", "Request Time", "IP Address", "Tenant", "Cross-Account"];
   const rows = events.map((e) =>
-    [e.downloader, e.username ?? "", e.target ?? "", e.task ?? "", e.activityCategory ?? "", e.requestTime ?? "", e.ipAddress ?? "", e.crossAccount ? "yes" : "no"]
+    [e.downloader, e.username ?? "", e.target ?? "", e.task ?? "", e.activityCategory ?? "", e.requestTime ?? "", e.ipAddress ?? "", e.tenant ?? "", e.crossAccount ? "yes" : "no"]
       .map((c) => '"' + String(c).replace(/"/g, '""') + '"')
       .join(",")
   );
@@ -65,13 +65,14 @@ export function DownloadActivity() {
                 <span>{flagged} cross-account download{flagged === 1 ? "" : "s"} flagged for review.</span>
               </div>
             )}
-            <Table className="min-w-[760px]">
+            <Table className="min-w-[820px]">
               <THead>
                 <tr>
                   <TH className="text-left">Downloader</TH>
                   <TH className="text-left">Target CLAR</TH>
                   <TH>Request Time</TH>
                   <TH>IP Address</TH>
+                  <TH>Tenant</TH>
                   <TH>Flag</TH>
                 </tr>
               </THead>
@@ -82,6 +83,7 @@ export function DownloadActivity() {
                     <TD className="text-left text-text-2" title={e.task ?? undefined}>{e.target ?? "—"}</TD>
                     <TD className="whitespace-nowrap text-text-3">{e.requestTime ?? "—"}</TD>
                     <TD className="whitespace-nowrap text-text-3">{e.ipAddress ?? "—"}</TD>
+                    <TD className="whitespace-nowrap text-text-3">{e.tenant ?? "—"}</TD>
                     <TD>
                       {e.crossAccount ? (
                         <span className="inline-block rounded-sm bg-danger/15 px-2 py-1 text-[10px] font-semibold text-danger">cross-account</span>

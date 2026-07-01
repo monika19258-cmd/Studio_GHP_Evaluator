@@ -143,6 +143,8 @@ export interface IsuAttachment {
   systemName?: string;
   /** Workday's "referenceID" value, when present. */
   referenceId?: string;
+  /** Which Workday tenant confirmed this attachment, e.g. "DPT3" or "DPT10". */
+  tenant?: string;
   /** Set when the lookup could not be performed (config/network/auth). */
   error?: string;
 }
@@ -155,6 +157,7 @@ export interface RaaSIntegrationResponse {
   integrationSystem?: string;
   systemName?: string;
   referenceId?: string;
+  tenant?: string;
   format?: "json" | "xml";
   error?: string;
 }
@@ -186,6 +189,9 @@ export interface RaaSActivity {
   /** Source IP address of the request. */
   ipAddress?: string;
 
+  /** Which Workday tenant this row came from, e.g. "DPT3" or "DPT10". */
+  tenant?: string;
+
   /** The raw report row, for fields not covered by the normalized shape. */
   raw: Record<string, unknown>;
 }
@@ -206,6 +212,8 @@ export interface DownloadEvent {
   activityCategory?: string;
   requestTime?: string;
   ipAddress?: string;
+  /** Which Workday tenant this event came from, e.g. "DPT3" or "DPT10". */
+  tenant?: string;
   /** True when the downloaded target does not appear to belong to the downloader. */
   crossAccount: boolean;
 }
@@ -226,4 +234,6 @@ export interface RaaSResponse {
   count: number;
   format: "json" | "xml";
   error?: string;
+  /** Non-fatal warnings when one tenant succeeded but another did not. */
+  warnings?: string[];
 }

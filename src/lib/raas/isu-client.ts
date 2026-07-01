@@ -27,6 +27,7 @@ export async function lookupIsuAttachment(integrationName: string): Promise<IsuA
       integrationSystem: data.integrationSystem,
       systemName: data.systemName,
       referenceId: data.referenceId,
+      tenant: data.tenant,
     };
   } catch {
     return { integrationName, checked: false, attached: false, workdayAccount: null, error: "Network error calling the integration route." };

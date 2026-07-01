@@ -78,6 +78,7 @@ export function findDownloadEvents(rows: RaaSActivity[]): DownloadEvent[] {
     activityCategory: row.activityCategory,
     requestTime: row.requestTime,
     ipAddress: row.ipAddress,
+    tenant: row.tenant,
     crossAccount: !targetBelongsToDownloader(row),
   }));
 }

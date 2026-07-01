@@ -61,16 +61,17 @@ export function applyIsuAttachment(student: StudentResult, rubric: Rubric, attac
   if (!prev) return next;
 
   const score = attachment.attached ? isu.max : 0;
+  const via = attachment.tenant ? ` via ${attachment.tenant}` : "";
   const verifyCheck: Check = {
     pass: attachment.attached,
     label: attachment.attached
-      ? `Integration "${attachment.integrationName}" is attached to ISU "${attachment.workdayAccount}" (RAAS-verified)`
-      : `Integration "${attachment.integrationName}" is NOT attached to any ISU (RAAS-verified)`,
+      ? `Integration "${attachment.integrationName}" is attached to ISU "${attachment.workdayAccount}" (RAAS-verified${via})`
+      : `Integration "${attachment.integrationName}" is NOT attached to any ISU (RAAS-verified${via})`,
     found: attachment.workdayAccount,
   };
   const tenantNote = attachment.attached
-    ? `RAAS-verified: ISU "${attachment.workdayAccount}" is bound to integration "${attachment.integrationName}". Auto-scored ${score}/${isu.max}.`
-    : `RAAS-verified: no ISU is bound to integration "${attachment.integrationName}". Auto-scored 0/${isu.max}.`;
+    ? `RAAS-verified${via}: ISU "${attachment.workdayAccount}" is bound to integration "${attachment.integrationName}". Auto-scored ${score}/${isu.max}.`
+    : `RAAS-verified${via}: no ISU is bound to integration "${attachment.integrationName}". Auto-scored 0/${isu.max}.`;
 
   next.results = {
     ...next.results,
