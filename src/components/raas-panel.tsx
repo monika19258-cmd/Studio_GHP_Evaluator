@@ -61,8 +61,24 @@ export function RaasPanel() {
         return;
       }
       setRaasRows(data.rows);
-      if (data.count === 0) setInfo("Report returned no rows. Check the report filter/prompt in Workday.");
-      else setInfo(`Fetched ${data.count} activity row${data.count === 1 ? "" : "s"} (${data.format.toUpperCase()}).`);
+      if (data.count === 0) {
+        setInfo("Report returned no rows. Check the report filter/prompt in Workday.");
+      } else {
+        // Build a per-tenant breakdown when rows carry tenant labels.
+        const byTenant: Record<string, number> = {};
+        for (const row of data.rows) {
+          const t = row.tenant ?? "default";
+          byTenant[t] = (byTenant[t] ?? 0) + 1;
+        }
+        const tenantSummary = Object.entries(byTenant)
+          .map(([t, n]) => `${t}: ${n}`)
+          .join(", ");
+        const summary = Object.keys(byTenant).length > 1
+          ? `Fetched ${data.count} activity rows (${tenantSummary}).`
+          : `Fetched ${data.count} activity row${data.count === 1 ? "" : "s"} (${data.format.toUpperCase()}).`;
+        const warnText = data.warnings?.length ? ` ⚠ ${data.warnings.join(" | ")}` : "";
+        setInfo(summary + warnText);
+      }
     } catch {
       setError("Network error calling the backend route.");
     } finally {
